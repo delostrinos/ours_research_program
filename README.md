@@ -9,6 +9,7 @@ This repository is the shared workspace for our research group. We use a feature
 ## Prerequisites
 
 - Git installed locally (`git --version` to check).
+- Python 3.10 or newer (`python3 --version` to check). See [Setting up Python](#setting-up-python) below if you need to install it.
 - A GitHub account that has been added as a collaborator on this repository (ping Mikhail if you haven't been added).
 - One of the following ways to authenticate to GitHub:
   - **SSH key** added to your GitHub account — see [Adding a new SSH key to your GitHub account](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account). Recommended.
@@ -135,6 +136,80 @@ git merge main
 # resolve any conflicts, commit, then:
 git push
 ```
+
+---
+
+## Setting up Python
+
+The experiments in this repo are pure Python (NumPy + Matplotlib so far). Each contributor works inside a per-clone virtual environment, so dependencies stay isolated from your system Python.
+
+### Install Python
+
+- **macOS:** install via [Homebrew](https://brew.sh/): `brew install python`. (The system Python that ships with macOS works too, but Homebrew's is easier to keep current.)
+- **Linux:** use your package manager, e.g. `sudo apt install python3 python3-venv` on Debian/Ubuntu.
+- **Windows:** install from [python.org](https://www.python.org/downloads/) and tick **"Add Python to PATH"** in the installer.
+
+Confirm the install with `python3 --version` (macOS/Linux) or `python --version` (Windows). You want 3.10 or newer.
+
+### Create a virtual environment
+
+Run this once, from the repo root, after cloning:
+
+```bash
+python3 -m venv .venv
+```
+
+This creates a `.venv/` directory containing a private copy of Python and its own `pip`. The `.venv/` directory is already in `.gitignore` so it never gets committed.
+
+### Activate the environment
+
+You need to activate the venv in every new terminal session before running scripts or installing packages.
+
+**macOS / Linux:**
+```bash
+source .venv/bin/activate
+```
+
+**Windows (PowerShell):**
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Once activated, your prompt will be prefixed with `(.venv)` and plain `python` / `pip` will resolve to the venv's copies. When you're done, run `deactivate` to leave the environment.
+
+> If you'd rather not activate, you can always call the venv's interpreter explicitly: `.venv/bin/python script.py` (macOS/Linux) or `.venv\Scripts\python.exe script.py` (Windows).
+
+### Install dependencies
+
+With the venv active:
+
+```bash
+pip install numpy matplotlib
+```
+
+That covers everything currently used in the repo. If you add new dependencies in your branch, install them the same way and mention them in your PR description so other contributors know to install them too.
+
+---
+
+## Running an experiment
+
+Experiment scripts live under `experiments/`. With the venv active, run any of them directly:
+
+```bash
+python experiments/recover_circle_area.py
+```
+
+Scripts that produce figures (like the disk-area experiment) save them under `figures/` and may also open an interactive matplotlib window. The `figures/` directory is gitignored — figures are reproducible from the script, so we don't track the PNGs in git.
+
+To view a saved figure on macOS:
+
+```bash
+open figures/visual_of_the_result.png
+```
+
+On Linux use `xdg-open`; on Windows use `start`.
+
+If a script opens an interactive window via `plt.show()`, the script blocks until you close the window. Close it to let the script exit and free the terminal.
 
 ---
 
