@@ -181,13 +181,13 @@ Once activated, your prompt will be prefixed with `(.venv)` and plain `python` /
 
 ### Install dependencies
 
-With the venv active:
+With the venv active, install everything in one go from the tracked `requirements.txt`:
 
 ```bash
-pip install numpy matplotlib
+pip install -r requirements.txt
 ```
 
-That covers everything currently used in the repo. If you add new dependencies in your branch, install them the same way and mention them in your PR description so other contributors know to install them too.
+If you add a new dependency in your branch, install it with `pip install <package>`, then append the pinned line (`<package>==<version>`, copy the version from `pip freeze`) to `requirements.txt` and commit it. Other contributors will pick the new dep up on their next `pip install -r requirements.txt`.
 
 ---
 
