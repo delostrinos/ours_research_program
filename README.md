@@ -1,6 +1,6 @@
 # ours_research_program
 
-Symbolic regression for mathematical inference.
+Symbolic regression for mathematical inference. Made by Spongebob Squarepants.
 
 This repository is the shared workspace for our research group. We use a feature-branch workflow on top of `main`: every contributor branches off `main` for the solution they are working on, pushes that branch to GitHub, and opens a pull request when it is ready for review.
 
