@@ -99,6 +99,7 @@ axR.set_ylabel(r"$\log J_N(c^{*})$")
 
 fig.tight_layout()
 fig.savefig("figures/visual_of_the_result.png", dpi=150)
+plt.show()
 
 # ---------------------------------------------------------------------------
 # Stdout summary.
