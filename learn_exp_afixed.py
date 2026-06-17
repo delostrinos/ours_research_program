@@ -35,15 +35,15 @@ from scipy.optimize import minimize
 # possible). With N = 4 we can recover up to 1/4! = 1/24.
 # ----------------------------------------------------------------------------
 M_DEG = 0              # max power of a  => only a^0 = 1 (a is fixed out)
-N_DEG = 10              # max power of t  => t^0 .. t^4
+N_DEG = 11              # max power of t  => t^0 .. t^4
 NUM_PARAMS = (M_DEG + 1) * (N_DEG + 1)   # 5 coefficients now, the flattened A
 
-NUM_TRIALS = 1000000        # number of random t training samples
+NUM_TRIALS = 100        # number of random t training samples
 
 # With a fixed at 1, the exponent is just t, so e^t on [0,1] stays modest and a
 # degree-4 polynomial can track it reasonably. a is no longer sampled.
 A_FIXED = 1.0              # a is held constant at this value
-T_MIN, T_MAX = 0.0, 1.0    # t sampled uniformly from [T_MIN, T_MAX]
+T_MIN, T_MAX = 0.0, 0.5    # t sampled uniformly from [T_MIN, T_MAX]
 
 
 # ----------------------------------------------------------------------------

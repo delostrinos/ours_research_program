@@ -28,16 +28,16 @@ from scipy.optimize import minimize
 # Tunable parameters. M, N are the max powers of a and t respectively.
 # With M = N = 4 we can recover Taylor terms up to 1/4! = 1/24.
 # ----------------------------------------------------------------------------
-M_DEG = 6              # max power of a  => a^0 .. a^4
-N_DEG = 6              # max power of t  => t^0 .. t^4
+M_DEG = 9              # max power of a  => a^0 .. a^4
+N_DEG = 9              # max power of t  => t^0 .. t^4
 NUM_PARAMS = (M_DEG + 1) * (N_DEG + 1)   # 25 coefficients, the flattened A
 
 NUM_TRIALS = 1000        # number of random (a, t) training samples
 
 # exp(a*t) grows fast, so keep the product a*t modest or a degree-4 polynomial
 # cannot possibly match it (truncation error). Small intervals do that.
-A_MIN, A_MAX = 0.0, 0.60    # a sampled uniformly from [A_MIN, A_MAX]
-T_MIN, T_MAX = 0.0, 0.60    # t sampled uniformly from [T_MIN, T_MAX]
+A_MIN, A_MAX = 0.0, 1.0    # a sampled uniformly from [A_MIN, A_MAX]
+T_MIN, T_MAX = 0.0, 1.0    # t sampled uniformly from [T_MIN, T_MAX]
 
 
 # ----------------------------------------------------------------------------
@@ -117,7 +117,7 @@ def make_objective(D, b, survivors, num_params):
 #   Refine:   re-minimize the loss over ONLY the surviving coefficients.
 # ----------------------------------------------------------------------------
 def sparsify_and_refine(D, b, c_lsq, num_params):
-    thresh = np.max(np.abs(c_lsq)) / 400.0           # 10% of the max coefficient
+    thresh = np.max(np.abs(c_lsq)) / 500.0           # 10% of the max coefficient
     c_sparse = np.where(np.abs(c_lsq) < thresh, 0.0, c_lsq)
     survivors = np.flatnonzero(c_sparse)            # indices that survived
 
