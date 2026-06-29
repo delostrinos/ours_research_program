@@ -219,3 +219,5 @@ If a script opens an interactive window via `plt.show()`, the script blocks unti
 - **Pull before you push.** If `git push` is rejected because the remote has new commits on your branch, run `git pull --rebase` and try again.
 - **Don't force-push to shared branches** (especially `main`). Force-pushing your own feature branch is okay if you know what you're doing.
 - **When in doubt, ask before doing anything destructive** (`git reset --hard`, `git push --force`, deleting branches you didn't create). Ping Mikhail.
+
+testing123
