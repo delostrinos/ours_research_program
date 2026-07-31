@@ -21,37 +21,18 @@ t_max = 1
 Num_of_steps = 50   # number of time steps - bigger = smoother Euler
 M, N = 3, 3         # polynomial degrees in a and t - START SMALL (recovers 4 terms)
 
-# Cell 2 - Generate data with Euler's method
+# Cell 2 (v2) - Generate data with the EXACT solution e^(at)
 
-# Step 1: sample the 'a' values (uniform, like random_radii in the circle code)
-#   -> Num_of_a values between a_min and a_max
-# Why do we need a values?
 a_values = np.random.uniform(a_min, a_max, Num_of_a)
-
-# Step 2: build the time grid
-#   -> time points from 0 to t_max, Num_of_steps of them
 time_grid = np.linspace(0, t_max, Num_of_steps)
 
-# Step 3: storage for the flattened triples
-# TODO: Why do we need these lists?
-a_data = []
-t_data = []
-x_data = []
+a_data, t_data, x_data = [], [], []
 
-# Step 4: loop over each 'a'
-#   for each a:
-#       start x at 1.0   (initial condition x(0)=1)
-#       loop over the time grid:
-#           record current (a, t, x) into the three lists
-#           Euler update: x = x + dt * a * x
 for a in a_values:
-    x = 1.0             # initial condition x(0) = 1
     for t in time_grid:
         a_data.append(a)
         t_data.append(t)
-        x_data.append(x)
-        # Euler update
-        x = x + dt * a * x
+        x_data.append(np.exp(a * t))
 
 print(len(a_data), len(t_data), len(x_data))
 print(a_data[0], t_data[0], x_data[0])
@@ -82,6 +63,32 @@ for m in range(M + 1):
         target = 1 / math.factorial(n) if m == n else 0.0
         star = "  <-- diagonal" if m == n else ""
         print(f"({m},{n})   {idx:<6}{c[idx]:>10.4f}{target:>10.4f}{star}")
+
+# Cell 4b - Normal equations: c = (D^T D)^(-1) D^T b
+# The classical closed-form least squares solution
+
+c_normal = np.linalg.solve(D.T @ D, D.T @ b)
+
+# How tangled is D^T D?
+print("cond(D):     ", f"{np.linalg.cond(D):.2e}")
+print("cond(D^T D): ", f"{np.linalg.cond(D.T @ D):.2e}")   # squared!
+
+# Do the two solvers agree?
+print("\nmax difference vs lstsq:", np.max(np.abs(c_normal - c)))
+
+# Cell 4c - SVD: see the collinearity with your own eyes
+
+U, S, Vt = np.linalg.svd(D, full_matrices=False)
+
+print("The 16 singular values of D:")
+for i, s in enumerate(S):
+    print(f"  sigma_{i:2d} = {s:12.6f}")
+
+print(f"\nbiggest/smallest = {S[0]/S[-1]:.2e}   <- this IS cond(D)")
+
+# Solve least squares via SVD:  c = V Sigma^(-1) U^T b
+c_svd = Vt.T @ ((U.T @ b) / S)
+print("max difference vs lstsq:", np.max(np.abs(c_svd - c)))
 
 # Cell 5 - Sparsify (hard thresholding, the "S" in LSSR)
 c_sparse = c.copy()                      # work on a copy, keep original c intact
@@ -185,7 +192,7 @@ t = 1 / L
 
 # --- Lambda from the normalized matrix ---
 lambda_max = np.max(np.abs(D_norm.T @ b))
-lam = 0.1 * lambda_max                        # blank: same fraction as MATLAB (0.1)
+lam = 0.02 * lambda_max     # was 0.1 — the support-finding setting
 
 # --- ISTA loop on the NORMALIZED matrix ---
 x = np.zeros(D_norm.shape[1])
@@ -209,44 +216,31 @@ for m in range(M + 1):
             star = "  <-- diag" if m == n else ""
             print(f"({m},{n})   {idx:<6}{c_ista[idx]:>10.4f}{target:>10.4f}{star}")
 
+# Cell 8 - Debiasing refit (remove the L1 shrinkage bias)
 
+# 1. ISTA's support: which columns survived?
+support = [i for i in range(len(c_ista)) if abs(c_ista[i]) > 1e-6]
+print("ISTA support (surviving columns):", support)
 
-# Cell 7 - ISTA with column normalization
+# 2. Matrix with ONLY those columns (original D, not normalized)
+D_support = D[:, support]
 
-def soft_threshold(z, eta):
-    return np.sign(z) * np.maximum(np.abs(z) - eta, 0)
+# 3. Plain least squares on the support — NO penalty, NO shrinkage
+c_debiased_small = np.linalg.lstsq(D_support, b, rcond=None)[0]
 
-# --- Normalize columns so ISTA treats them fairly ---
-col_norms = np.linalg.norm(D, axis=0)      # norm of each of the 16 columns
-D_norm = D / col_norms                       # divide each column by its norm
+# 4. Scatter back into a full 16-vector
+c_debiased = np.zeros(len(c_ista))
+for slot, idx in enumerate(support):
+    c_debiased[idx] = c_debiased_small[slot]
 
-# --- Step size from the NORMALIZED matrix ---
-L = np.linalg.norm(D_norm, 2) ** 2
-t = 1 / L
-
-# --- Lambda from the normalized matrix ---
-lambda_max = np.max(np.abs(D_norm.T @ b))
-lam = 0.1 * lambda_max                        # trying a weaker penalty
-
-# --- ISTA loop on the NORMALIZED matrix ---
-x = np.zeros(D_norm.shape[1])
-maxit = 5000
-for k in range(maxit):
-    grad = D_norm.T @ (D_norm @ x - b)        # note: D_norm now, not D
-    x = soft_threshold(x - t * grad, t * lam)
-
-# --- Undo the normalization to get REAL coefficients ---
-c_ista = x / col_norms                         # convert back to real units
-
-# --- Report ---
-print(f"L = {L:.4f},  t = {t:.6f},  lambda = {lam:.4f}\n")
-print(f"{'(m,n)':<8}{'col':<6}{'ISTA':>10}{'target':>10}")
-print("-" * 34)
+# 5. Report
+print(f"\n{'(m,n)':<8}{'col':<6}{'debiased':>10}{'target':>10}")
+print("-" * 36)
 for m in range(M + 1):
     for n in range(N + 1):
         idx = m * (N + 1) + n
-        if abs(c_ista[idx]) > 1e-6:
+        if abs(c_debiased[idx]) > 1e-6:
             target = 1/math.factorial(n) if m == n else 0.0
             star = "  <-- diag" if m == n else ""
-            print(f"({m},{n})   {idx:<6}{c_ista[idx]:>10.4f}{target:>10.4f}{star}")
+            print(f"({m},{n})   {idx:<6}{c_debiased[idx]:>10.4f}{target:>10.4f}{star}")
 

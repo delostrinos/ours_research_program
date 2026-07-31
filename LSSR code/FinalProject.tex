@@ -1,0 +1,249 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{float}
+\usepackage[nameinlink,noabbrev]{cleveref}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+\title{An Investigative Analysis of Sparse Symbolic Regression with Compositional Functions}
+\author{}
+
+\date{\small Advisor: Dr.\ Jimmie Adriazola, Arizona State University\\[4pt] \today}
+
+
+\begin{document}
+\maketitle
+ 
+\begin{abstract}
+
+ABSTRACT (Section 1)
+
+\end{abstract}
+
+\section{Introduction (Prof)}\label{sec:introduction}
+
+\section{Section 2 (Nat + Seb $\rightarrow$ Methods)}\label{sec:quadratic}
+
+\section{Section 3 (Rainne + Seb $\rightarrow$ Example Problems)}\label{sec:introduction}
+
+\section{Section 4 (Mikhail + Rainne $\rightarrow$ Exponential)}\label{sec:quadratic}
+
+\section{Section 5 (Maria + Seb $\rightarrow$ Composition)}\label{sec:introduction}
+Sparse Symbolic Regression (SSR) is a symbolic regression framework that identifies sparse governing equations from data using a predefined function library~\cite{brunton2016sindy}. SSR works to rediscover the function $\Omega$ governing a data relationship (i, $\Omega(i)$) for $i \in R^n$ while keeping the discovered formula sparse and interpretable. Its loss is optimized through the formula $\frac{1}{2}{\lVert \mathbf{A} \mathbf{x} - \mathbf{b}\rVert}^2 + \lambda {\lVert\mathbf{x}\rVert_1}$, where the $\lambda$ is L1 regularization~\cite{tibshirani1996lasso} which will ensure a sparse and interpretable selection for our results~\cite{beck2009fista}. These results seek to predict $\Omega$. We will use SSR initially to rediscover the simpler formulas related to the area of a circle, the volume of a cylinder, and the formula $\sin(x^2+y^2)$. We will then move on to more complex compositional functions namely, the Quadratic Formula and the Cardano formula for cubic roots.
+
+\section{Initial Analysis}\label{sec:quadratic}
+
+To begin our analysis, we started with attempting to rediscover three relatively simple formulas: 1. the Area of a Circle ($\pi r^2$), 2. the Volume of a Cylinder ($\pi r^2h$), and 3. the compositional formula $\sin(x^2+y^2)$. For the initial two problems, alongside including the correct functions, we additionally included noise functions in the library to test its ability, whereas for the final compositional formula problem we included only $f(x) = 1$, $f(x,y) \in Q_{3,3}$, and $\sin(f(x,y))$ for $sin(f(x,y)) \in Q_{3,3}$ in the library. This slow increase in complexity will make our analysis on the more complicated compositional functions of Quadratic and Cardano formulas significantly easier to interpret. Our optimization was done using FISTA~\cite{beck2009fista}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=1.1\textwidth]{SSRCoef.png}
+\caption{The coefficients found by the SSR models for the three problems, and the true coefficients (orange lines). Magnitude of differences between predicted and true coefficients are provided if the magnitude is large enough ($\ge 0.1$)}
+\label{fig:cardano-sweep}
+\end{figure}
+
+In terms of coefficient number, the simple compositional function $\sin(x^2+y^2)$ required over 100 coefficients, and it did not fully span the space of functions $\sin(f(x,y))$ for $f(x,y) \in Q_{3,3}$, which due to combinatorics would have taken 511 terms. This demonstrates SSR's combinatorial growth with problem complexity. Even a simple compositional function requires a large amount of terms. 
+
+However in the presence of these terms, SSR was able to correctly identify the right coefficient, unlike for the Area of a Circle and Volume of a Cylinder formulas where it got "caught up" in the noise. Overall, this suggests that SSR's scaling may make it less fit for more complex compositional functions, as it may get "distracted" easily by noise. However in these specific cases it still provided useful results, and upon inputting into a thresholder, we would have been able to rediscover each of the formulas.
+
+
+\section{Quadratic Formula}\label{sec:quadratic}
+We begin with the quadratic equation as a more complicated test.
+For
+\begin{equation}
+\label{eq:quadratic}
+x^2 + b x + c = 0,
+\end{equation}
+the two roots are given by the quadratic formula
+\begin{equation}
+\label{eq:quadratic-solution}
+x = -\frac{b}{2} \pm \frac{1}{2}\sqrt{b^2 - 4c}.
+\end{equation}
+
+The quantity under the square root, the discriminant $b^2 - 4c$, decides
+the nature of the roots: when $b^2 - 4c > 0$ there are two distinct real
+roots, which is the regime we study here. The formula already has a simple
+compositional structure: a linear part in $(b, c)$ plus the square root of
+a second linear part. This makes the quadratic a good step up in complexity for testing whether sparse symbolic regression can recover a closed-form solution from data.
+ 
+\subsection*{Data generation}
+ 
+The training roots are produced independently of the quadratic formula. We generate them numerically with Newton's method~\cite{suli2003numerical} which solves each equation by iterative
+refinement and never uses \cref{eq:quadratic-solution}. For each randomly
+drawn pair $(b, c)$ with $b^2 - 4c > 0$ we compute a root and form a training pair $\big((b, c), \text{root}\big)$. Because the quadratic has
+two real roots, we treat the two branches separately: starting Newton from
+a large positive guess recovers the $+\sqrt{\cdot}$ root, and from a large
+negative guess the $-\sqrt{\cdot}$ root. This gives us two separate datasets, one for each root.
+ 
+\subsection*{Hypothesis and recovery}
+ 
+We fit a hypothesis with the compositional structure of the quadratic
+formula but with unknown coefficients, using a full degree-two monomial
+basis inside the square root:
+\begin{equation}
+\label{eq:quad-hypothesis}
+\hat{x} = \xi_0 + \xi_1 b + \xi_2 c + \xi_3 \sqrt{S},
+\end{equation}
+where
+\begin{equation}
+S = \xi_4 + \xi_5 b + \xi_6 c + \xi_7 b^2 + \xi_8 c^2 + \xi_9 bc.
+\end{equation}
+
+Most of these terms are not needed for the true formula. We include them
+on purpose, so the method has to \emph{choose} the correct ones instead of
+being given them. This is a sparse symbolic regression like
+SSR~\cite{brunton2016sindy}: we provide many possible terms and keep only
+the ones that matter. We fit the coefficients by minimizing the mean
+squared error, then set the very small coefficients to zero. This idea of
+driving unimportant coefficients to zero comes from the lasso~\cite{tibshirani1996lasso}. 
+
+After optimization and scale normalization, the surviving coefficients match the exact values of the quadratic formula on both branches, as shown in \cref{tab:quadratic-coeffs}.
+\begin{table}[!ht]
+\centering
+\caption{Recovered coefficients for the two branches of the quadratic
+formula compared with their exact values. All other coefficients are
+driven to zero.}
+\label{tab:quadratic-coeffs}
+\begin{tabular}{lccc}
+\toprule
+Coefficient & Recovered ($+$ branch) & Recovered ($-$ branch) & Exact \\
+\midrule
+$\xi_1$ (coeff.\ of $b$)           & $-0.500$ & $-0.500$ & $-\tfrac{1}{2}$ \\
+$\xi_3$ (coeff.\ of $\sqrt{S}$)    & $0.500$ & $-0.500$ & $\pm\tfrac{1}{2}$ \\
+$\xi_6$ (coeff.\ of $c$ in $S$)    & $-4.000$ & $-4.000$ & $-4$            \\
+$\xi_7$ (coeff.\ of $b^2$ in $S$)  & $1.000$  & $1.000$  & $1$             \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The two branches differ only in the sign of $\xi_3$, exactly as the
+$\pm$ in \cref{eq:quadratic-solution} predicts, and in both cases the term
+inside the square root recovers $b^2 - 4c$. The quadratic therefore shows
+that the method can rediscover a closed-form solution from data alone. This is, however, an easy case: the square root appears only once, and the
+library of candidate terms is small. The cubic in \cref{sec:cardano} pushes these same ideas much further. There, the nested radicals force us to supply more structure by hand, and the library needed to recover the formula grows quickly — exposing the two limitations of SSR that this paper set out to study.
+
+\section{Cardano's Formula}\label{sec:cardano}
+Cardano's formula, discovered by the three Italian mathematicians Scipione del Ferro, Niccolò Tartaglia, and Girolamo Cardano in the 16th century, solves the cubic equation of form
+\begin{equation}
+\label{eq:depressed-cubic}
+x^3 + px + q = 0.
+\end{equation}
+Which is reached from $x^3 + ax^2 + bx + c = 0$ through algebraic processes~\cite{quanta2022cubic}.
+Cardano's formula gives a solution as
+
+\begin{equation}
+\label{eq:cardano-formula}
+x = \sqrt[3]{-\frac{q}{2} + \sqrt{\frac{q^2}{4} + \frac{p^3}{27}}} + \sqrt[3]{-\frac{q}{2} - \sqrt{\frac{q^2}{4} + \frac{p^3}{27}}}
+\end{equation}
+The quantity under the inner square root,
+\begin{equation}
+\label{eq:cardano-discriminant}
+S = \frac{q^2}{4} + \frac{p^3}{27},
+\end{equation}
+governs the behavior of the formula. When $S \geq 0$, the square root is real and the formula returns a real root. When $S < 0$, the inner square root is imaginary, so the real-radical formula has no real value even though the cubic still has three real roots. This case is classically known as the \emph{casus irreducibilis}, and it is provably impossible to express the roots using real radicals alone~\cite{degraaf_galois}. The sign of $S$ matches the discriminant condition $4p^3 + 27q^2$, so the boundary between the two regimes is the curve $4p^3 + 27q^2 = 0$.
+ 
+\subsection*{Data generation}
+ 
+To keep the discovered formula honest, the training roots must be produced independently of Cardano's formula. We therefore generate roots numerically with Newton's method~\cite{suli2003numerical}, which solves each cubic by iterative
+refinement and never uses the closed form above. For each randomly drawn pair $(p, q)$ we compute a root $t$ and form the training pair
+$\big((p, q), t\big)$. Because the labels never contain Cardano's formula, recovering it is a genuine discovery rather than a restatement of the data. We restrict the data to the one-real-root regime $4p^3 + 27q^2 > 0$, where the real-radical formula is well defined and stable.
+ 
+\subsection*{Hypothesis and recovery}
+ 
+We fit a hypothesis with the compositional structure of Cardano's formula
+but with unknown coefficients. The inner expressions are written as a full
+degree-three monomial basis in $(p, q)$:
+\begin{equation}
+\label{eq:cubic-hypothesis}
+\hat{t} = \xi_0
+\left(
+\sqrt[3]{L + \sqrt{S}} + \sqrt[3]{L - \sqrt{S}}
+\right),
+\end{equation}
+where
+\begin{align}
+L &= \xi_1 + \xi_2 p + \xi_3 q, \\
+S &= \xi_4 + \xi_5 p + \xi_6 q + \xi_7 p^2 + \xi_8 q^2
+     + \xi_9 pq + \xi_{10} p^3 + \xi_{11} q^3.
+\end{align}
+
+Most of these monomials are not required by the true formula. Including
+them on purpose forces the method to \emph{select} the correct terms
+rather than receiving them in advance. We emphasize, however, that the
+outer radical structure is still assumed here: only the coefficients and
+the set of active terms are recovered, not the nested cube-root and
+square-root form itself. We minimize the mean squared error
+together with an L1 penalty~\cite{tibshirani1996lasso},
+\begin{equation}
+\label{eq:cubic-objective}
+\min_{\xi}\;
+\frac{1}{2N}\sum_{n=1}^{N}
+\big(\hat{t}(p_n, q_n) - t_n\big)^2
++ \lambda \sum_{j \geq 1} |\xi_j|,
+\end{equation}
+where the L1 term drives unnecessary coefficients to zero, so the
+sparsity pattern is discovered from the data rather than imposed. This is a sparse symbolic regression in the spirit of SSR: a library of candidate
+terms with an L1 penalty selecting the active ones. It also shares SSR's central limitation: the library must already contain the terms the true solution requires. In our case, this forced us to supply the radical structure by hand. 
+
+After optimization and a scale normalization, the surviving coefficients match the exact values of Cardano's formula, as shown in \cref{tab:cardano-coeffs}.
+ 
+\begin{table}[!ht]
+\centering
+\caption{Recovered coefficients compared with the exact values of
+Cardano's formula. All other coefficients are driven to zero.}
+\label{tab:cardano-coeffs}
+\begin{tabular}{lcc}
+\toprule
+Coefficient & Recovered & Exact \\
+\midrule
+$\xi_0$    & $0.999$  & $1$            \\
+$\xi_3$ (coeff.\ of $q$ in $L$)      & $-0.500$ & $-\tfrac{1}{2}$ \\
+$\xi_8$ (coeff.\ of $q^2$ in $S$)    & $0.25$  & $\tfrac{1}{4}$  \\
+$\xi_{10}$ (coeff.\ of $p^3$ in $S$) & $0.037$ & $\tfrac{1}{27}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{Sweeping the coefficient plane}
+Recovering the coefficients only confirms that the formula works on the
+data we trained it on. A more interesting test is to check the learned
+formula across the whole $(p, q)$ plane and see where the quantity under
+the square root, $S$, becomes negative. 
+
+We test a dense grid of points over $p, q \in [-6, 6]$ and mark each one as a success ($S \geq 0$) or a failure ($S < 0$). The failure region matches the condition $4p^3 + 27q^2 < 0$ at every point on the grid, and its boundary is exactly the discriminant curve $4p^3 + 27q^2 = 0$ (\cref{fig:cardano-sweep-1}).
+This shows the method does more than just fit coefficients. On its own, it rediscovers the \emph{casus irreducibilis}: the region of the plane that no real-radical formula can reach. 
+
+At the same time, recovering the formula was only possible because we built the radical structure in by hand. If the library had not already contained these compositional terms, the method could not have found the solution at all. This is the central limitation of SSR: it can only recover a formula that its library is already able to express. Together with the way such libraries grow very quickly as the formula becomes more complex, this is the core weakness that our analysis set out to expose. 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.5\textwidth]{cardano_sweep.pdf}
+\caption{Where the real-radical formula succeeds (blue color) versus fails (red color). The failure region matches $4p^3 + 27q^2 < 0$ on the full grid, and the boundary is the discriminant curve.}
+\label{fig:cardano-sweep-1}
+\end{figure}
+
+\section{Section 6 (Natali $\rightarrow$ Stirling Approx)}\label{sec:quadratic}
+
+\section{Section 7 (Prof $\rightarrow$ Future Probs)}\label{sec:introduction}
+
+\section{Conclusion (Prof)}\label{sec:quadratic}
+
+
+
+\bibliographystyle{plain}
+\bibliography{references_CompAnalysis}
+\nocite{*}
+
+
+\end{document}
+
