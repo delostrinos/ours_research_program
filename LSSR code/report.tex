@@ -1,0 +1,300 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{definition}{Definition}
+
+\title{Learning Mathematics Through the Machine: \\
+Rediscovering Closed-Form Expressions from Data via the LSSR Pipeline}
+\author{Rainne Eliot Busque \and Mikhail \\
+\small Advisor: Dr.\ Jimmie Adriazola, Arizona State University}
+\date{June 27, 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We investigate whether a sparse-recovery pipeline can rediscover known closed-form
+mathematical expressions directly from numerical data, without ever being given the
+governing equation. We construct a Vandermonde-type candidate library $D$ from sampled
+data $b$, solve $Dc = b$, and recover the coefficient vector $c$ via a four-step
+procedure we call LSSR (Least Squares $\to$ Sparsify $\to$ Refine): least-squares solve,
+hard-threshold small coefficients, and refit on the surviving support. Across three
+stages of increasing difficulty --- a finite polynomial, the Maclaurin series of $e^{t}$,
+and the bivariate family $e^{at}$ --- we identify and isolate three independent failure
+modes: underdetermination, truncation, and collinearity. We show that only collinearity
+is actually fixed by sparsification; the other two are numerical issues that more data
+or a better threshold cannot repair. Two independent implementations (a matrix-form
+solve and a reduced vector-form solve at $a=1$) converge on the same diagonal structure
+and the same conclusion: QR/SVD-based solves outperform normal equations by roughly nine
+orders of magnitude in conditioning, and a fixed relative threshold of $10\%$ silently
+destroys true coefficients smaller than $1/3!$.
+\end{abstract}
+
+\section{Introduction}
+
+Most uses of machine learning fit a black-box function to data: given inputs and
+outputs, the model interpolates a relationship that may have no algebraic meaning beyond
+the fit itself. Our project asks a different question. Suppose we already know that the
+underlying relationship has a sparse representation in a fixed library of candidate
+terms --- monomials in our case. Can an optimization algorithm, given nothing but
+samples of the function, recover the exact coefficients of that representation, and
+therefore the exact closed-form expression, with no prior knowledge of which terms are
+nonzero?
+
+We call this \emph{discovery} rather than \emph{curve-fitting}: a curve fit draws a line
+through points, while discovery reads off which terms exist in the underlying expression
+and what their exact values are. If those values match known mathematical constants ---
+for example, the Taylor coefficients $1/n!$ --- the result is not just an accurate
+predictor but a recovered piece of mathematical truth.
+
+Concretely, we build a candidate (Vandermonde) matrix $D$ whose columns are monomial
+terms evaluated at sample points, collect a data vector $b$, and seek a coefficient
+vector $c$ solving
+\begin{equation}
+D c = b.
+\label{eq:dcb}
+\end{equation}
+The columns of $D$ define the hypothesis space; the machine is never told which columns
+matter. We solve for $c$ via the LSSR pipeline: an ordinary least-squares solve, followed
+by hard thresholding of small coefficients, followed by a refit restricted to the
+surviving (non-thresholded) columns. The project proposal deliberately specifies this
+naive threshold-based scheme rather than an $\ell_1$-penalized method such as LASSO or
+ISTA, so that the failure modes of simple sparsification could be characterized on their
+own terms before introducing a more principled penalty.
+
+We organize the investigation into three stages of increasing difficulty:
+
+\begin{enumerate}
+  \item \textbf{Stage 1 (polynomial):} recover $x(t) = t + t^2$, a finite-degree
+  ground truth, as a sanity check on the pipeline itself.
+  \item \textbf{Stage 2 ($e^{t}$):} recover the Maclaurin series of $e^{t}$, an
+  infinite series that must be approximated by a finite basis, introducing truncation
+  error for the first time.
+  \item \textbf{Stage 3 ($e^{at}$):} recover the bivariate family $e^{at}$ via a
+  $4\times 4$ grid of monomials $a^m t^n$, whose true coefficient matrix is diagonal
+  ($A_{mn} = 1/n!$ when $m=n$, zero otherwise). This stage introduces severe collinearity
+  between candidate columns.
+\end{enumerate}
+
+Across these three stages we found that apparent ``failures'' of the pipeline were not
+one problem but three independent ones --- underdetermination, truncation, and
+collinearity --- each with a different cause and a different fix, and that only one of
+the three (collinearity) is actually addressed by sparsification at all.
+
+\section{Method}
+
+\subsection{The LSSR pipeline}
+
+Given a candidate matrix $D \in \mathbb{R}^{N \times K}$ (samples $\times$ candidate
+terms) and data $b \in \mathbb{R}^{N}$, the pipeline proceeds in four steps:
+
+\begin{enumerate}
+  \item \textbf{Generate data.} Samples are produced either by numerically integrating
+  the governing ODE with Euler's method, or by direct exact evaluation of the closed
+  form (e.g.\ \texttt{np.exp(a*t)}), to separate data-generation error from solver error.
+  \item \textbf{Least squares.} Solve Equation~\eqref{eq:dcb} for the full,
+  dense coefficient vector $c$, typically via \texttt{np.linalg.lstsq}, which uses an
+  SVD-based solve rather than forming the normal equations directly.
+  \item \textbf{Sparsify.} Apply a hard threshold: any coefficient with
+  $|c_j| < \varepsilon$ is set to exactly zero, where $\varepsilon$ is a fixed fraction
+  (here, $10\%$) of the largest coefficient magnitude.
+  \item \textbf{Refine.} Re-solve the least-squares problem restricted to the
+  surviving (non-zeroed) columns of $D$, removing the bias introduced by the discarded
+  candidates' having been forced into the original full solve.
+\end{enumerate}
+
+\subsection{Two independent implementations}
+
+To guard against a single coding error masquerading as a scientific conclusion, the two
+authors implemented the pipeline independently, without viewing one another's code, and
+compared results only afterward.
+
+\begin{itemize}
+  \item \textbf{Rainne} built the matrix-form pipeline by hand in guided notebooks: a
+  Vandermonde-style design matrix solved via \texttt{np.linalg.lstsq} (SVD), carried
+  through Stages 1--3 with threshold-and-refit.
+  \item \textbf{Mikhail} (\texttt{learn\_exp\_afixed.py}) fixed $a=1$, collapsing the
+  problem to a single-variable, degree-11 Taylor recovery of $e^{t}$, solved both via the
+  normal equations and via QR/SVD, with BFGS used for refinement.
+\end{itemize}
+
+Despite different code, different parameterizations, and different solvers, both
+authors independently converged on the same stable SVD-based solution and the same
+diagnosis of the underlying numerical issues, which we treat as the strongest validation
+available within the scope of this project.
+
+\section{Results}
+
+\subsection{Stage 1: a finite polynomial as a sanity check}
+
+For $x(t) = t + t^2$, data were generated by Euler-integrating
+$\dot{x} = 1 + 2t$. Plain least squares alone --- no sparsification required ---
+recovered
+\[
+c_1 = 0.99, \qquad c_2 = 1.00,
+\]
+with every other candidate coefficient at machine zero ($\sim 10^{-15}$). Because the
+ground truth is an exact, finite-degree polynomial, there is no tail to truncate and no
+collinearity among the only two active columns, so this stage validates the pipeline's
+correctness rather than stressing it.
+
+\subsection{Stage 2: the Maclaurin series of $e^{t}$}
+
+Recovering $e^{t}$ from an 11-term candidate basis returned coefficients matching $1/n!$
+to roughly seven digits of accuracy --- visibly $1, 1, \tfrac{1}{2}, \tfrac{1}{6},
+\dots$, the Taylor series, obtained with no prior knowledge of the closed form. Three
+control experiments isolated the source of the remaining error:
+
+\begin{enumerate}
+  \item Replacing Euler-integrated data with exact evaluation did \emph{not} reduce
+  the error, showing the error is structural (a property of approximating an infinite
+  series with a finite basis) rather than a data-quality issue.
+  \item Raising the polynomial degree (4 $\to$ 7) pushed the distortion into terms we
+  were already discarding, improving accuracy on the terms we kept.
+  \item Shrinking the sampling window produced roughly a tenfold reduction in error,
+  because high powers of $t$ shrink fastest when $t$ is restricted to a small interval.
+\end{enumerate}
+
+\subsection{Stage 3: the bivariate family $e^{at}$}
+
+Expanding $e^{at}$ in both $a$ and $t$ produces a $4\times 4$ grid of 16 monomial terms
+$a^m t^n$. The true coefficient matrix is diagonal, $A_{mn} = 1/n!$ for $m=n$ and zero
+otherwise, so 12 of the 16 candidate terms should vanish exactly.
+
+In the original window and degree, this stage failed outright: spurious (``junk'')
+coefficients reached magnitudes up to $-1.24$, larger than a genuine diagonal term
+($0.95$). No threshold value could separate signal from junk, and switching to exact
+(noise-free) data did not help --- direct evidence that the failure is a property of the
+matrix $D$ itself (collinearity among its columns), not of the data.
+
+Shrinking the sampling window to $[0, 0.5]$ and raising the degree to 9 resolved this:
+with a loosened threshold, LSSR recovered the full diagonal structure to within
+$\sim 10^{-3}$ through the $1/5!$ term, confirming the answer is exactly $e^{at}$.
+
+\subsection{The reduced problem: fixing $a=1$}
+
+Mikhail's independent implementation fixed $a=1$, collapsing the $(M+1)\times(N+1)$
+coefficient matrix to an $(N+1)$-dimensional vector problem ($e^{t}$ alone) and pushing
+the degree to 11. Comparing solvers on identical data:
+\begin{itemize}
+  \item Normal equations: error $\approx 40$.
+  \item QR/SVD: error $\approx 1.2 \times 10^{-7}$.
+\end{itemize}
+The data were exact, with no injected measurement noise, so this nine-order-of-magnitude
+gap is purely a consequence of solver conditioning: forming the normal equations squares
+the condition number of $D$, while QR/SVD solves $Dc=b$ directly and preserves
+$\mathrm{cond}(D)$. High-order terms eventually hit the floating-point floor
+($1/10! \approx 3\times 10^{-7}$), marking the limit of numerical, rather than
+statistical, accuracy.
+
+\begin{table}[h]
+\centering
+\caption{Recovery error by solver, fixed $a=1$, degree 11, identical exact data.}
+\label{tab:solver-comparison}
+\begin{tabular}{@{}lc@{}}
+\toprule
+Solver & Recovery error \\
+\midrule
+Normal equations ($D^{\top}D\, c = D^{\top}b$) & $\approx 40$ \\
+QR / SVD (direct solve of $Dc=b$)              & $\approx 1.2 \times 10^{-7}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Three Independent Failure Modes}
+
+The results above show that what initially looked like one fragile pipeline is better
+understood as three separate, independently-caused failure modes, only one of which
+sparsification actually fixes.
+
+\begin{definition}[Underdetermination]
+A system $Dc = b$ with more unknown coefficients than independent equations has no
+unique solution. In our setting this is resolved simply by collecting enough samples;
+empirically, accuracy saturates once the sample count reaches roughly 30--100, after
+which additional samples are wasted computation.
+\end{definition}
+
+\begin{definition}[Truncation]
+When the ground truth is an infinite series and the candidate library is a finite-degree
+basis, the discarded tail
+\[
+e^{t} - P_N(t) = \sum_{n=N+1}^{\infty} \frac{t^n}{n!}
+\]
+is unavoidable. The error floor scales as $|{\rm tail}| \approx T_{\max}^{N+1}/(N+1)!$,
+which links degree $N$ and sampling window $T_{\max}$: they must be tuned together. A
+narrow window starves high-order terms of signal; a wide window with low degree lets the
+tail explode. This failure mode was invisible in Stage 1, where the ground truth was an
+exact finite polynomial with a zero tail.
+\end{definition}
+
+\begin{definition}[Collinearity]
+When candidate columns of $D$ are nearly linearly dependent, coefficient weight smears
+unpredictably across columns that should be zero. Critically, this is a property of the
+\emph{design matrix}, not of the data: exact, noise-free data does not repair it. The
+only effective remedy is sparsification (LSSR's threshold-and-refit), not more samples.
+\end{definition}
+
+\begin{theorem}
+For the Stage~3 design matrix, normal-equation and QR/SVD solves of the identical
+least-squares problem $Dc=b$ are mathematically equivalent at infinite precision but
+differ by roughly nine orders of magnitude in floating-point practice, because forming
+$D^{\top}D$ squares the condition number of $D$.
+\end{theorem}
+\begin{proof}
+Let $D$ have singular values $\sigma_1 \ge \cdots \ge \sigma_k > 0$, so that
+$\mathrm{cond}(D) = \sigma_1/\sigma_k$. The matrix $D^{\top}D$ has eigenvalues
+$\sigma_i^2$, so $\mathrm{cond}(D^{\top}D) = \sigma_1^2/\sigma_k^2 = \mathrm{cond}(D)^2$.
+Solving the normal equations $D^{\top}Dc = D^{\top}b$ inherits this squared condition
+number, amplifying floating-point error roughly in proportion to it, whereas QR and SVD
+factor $D$ directly and never form $D^{\top}D$, so error amplification scales only with
+$\mathrm{cond}(D)$ itself. The empirical gap reported in Table~\ref{tab:solver-comparison}
+($\sim 10^{-7}$ versus $\approx 40$) is consistent with this squaring relationship at the
+condition numbers present in our Stage~3 / fixed-$a$ design matrices.
+\end{proof}
+
+\section{Discussion}
+
+A second, related result concerns the threshold step itself. The true coefficients in
+the $e^{t}$ recovery span many orders of magnitude: $1, 1, \tfrac12, \dots,
+1/11! \approx 2.5\times 10^{-8}$. The proposal's fixed relative rule --- zero any
+coefficient below $10\%$ of the largest --- annihilates every true coefficient past
+$1/3!$, because a relative cutoff cannot distinguish a small \emph{true} coefficient from
+a small \emph{spurious} one. Loosening $\varepsilon$ to preserve the small true terms
+recovers all twelve correctly, but at the cost of sparsifying nothing at all: the
+pipeline collapses back to plain least squares plus a refit. This is, in our view, the
+sharpest practical limitation of naive hard thresholding relative to a principled
+$\ell_1$ penalty (LASSO/ISTA), which shrinks all coefficients continuously rather than
+applying one global cutoff.
+
+Finally, the comparison between the full bivariate matrix form and Mikhail's reduced
+vector form ($a=1$) shows that dimensionality reduction, where it is legitimate, is worth
+far more than additional data or a better solver. The vector form wins on three
+independent counts: fewer unknowns, no all-zero off-diagonal block available to absorb
+numerical error, and a design matrix that is roughly $10^{8}\times$ better conditioned.
+The caveat is that the full matrix form solves a strictly harder and more general
+problem --- it must discover, rather than assume, that $a$ and $t$ enter the true
+function only through the product $at$.
+
+\section{Conclusion}
+
+Sparse recovery can rediscover known closed-form mathematics directly from sampled data,
+with no governing equation supplied in advance: across three stages we recovered an
+exact polynomial, the Taylor series of $e^{t}$, and the full diagonal structure of
+$e^{at}$, the last validated by two independent implementations built without
+cross-communication. The central finding is that what appears to be a single fragile
+pipeline is in fact three independent failure modes --- underdetermination, truncation,
+and collinearity --- each diagnosed by a different controlled experiment and fixed by a
+different remedy (more samples; coupling degree and window; sparsification,
+respectively). Of the three, only collinearity is addressed by sparsification at all,
+and the naive fixed-threshold version of sparsification used here is itself fragile: it
+silently destroys true small coefficients unless loosened to the point of doing nothing.
+This motivates replacing the hard threshold with a principled $\ell_1$ penalty solved via
+ISTA, a direction for the next phase of this work.
+
+\end{document}
